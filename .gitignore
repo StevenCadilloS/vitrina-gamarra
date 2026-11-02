@@ -4,3 +4,6 @@ node_modules/
 Thumbs.db
 .claude/
 vitrina-gamarra.html
+
+.vercel
+.env*
