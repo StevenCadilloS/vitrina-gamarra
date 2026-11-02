@@ -7,3 +7,5 @@ vitrina-gamarra.html
 
 .vercel
 .env*
+video/*.mp4
+video/*.webm

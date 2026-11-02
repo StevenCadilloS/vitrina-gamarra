@@ -72,7 +72,7 @@ Netlify o GitHub Pages también sirven: es un sitio estático.
 ## Medir visitas
 
 1. En el proyecto de Vercel, abre **Analytics** y activa **Web Analytics**.
-2. En `index.html`, quita el comentario de la línea `<script defer src="/_vercel/insights/script.js"></script>`.
+2. El código ya está listo en `index.html`: el script solo se carga en la dirección de Vercel, no en tu computadora.
 
 Verás visitas, países y dispositivos. La página también envía eventos de búsquedas, tiendas abiertas, prendas vistas y clics en WhatsApp. Esos eventos personalizados pueden requerir un plan pago de Vercel; las visitas se ven en el plan gratis.
 
