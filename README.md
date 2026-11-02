@@ -44,11 +44,16 @@ Todo está en `js/data.js`:
 1. Guarda la foto en `img/prendas/`, por ejemplo `img/prendas/LB103-01.jpg`. Usa JPG de unos 800 px de ancho para que cargue rápido en el celular.
 2. En `js/data.js`, en esa prenda, cambia `"foto": null` por `"foto": "img/prendas/LB103-01.jpg"`.
 
-Las prendas sin foto muestran un dibujo de su categoría.
+Las prendas y tiendas sin foto propia muestran una foto referencial de Unsplash (licencia libre), con su crédito. La lista está en `js/fotos.js`. Una tienda también acepta `"foto"` con la ruta a una imagen del local.
 
 ### Activar WhatsApp
 
 Con `"demo": true` el botón no abre WhatsApp, para no escribir a números inventados. Cuando los números sean reales, pon `"demo": false` y el botón abrirá `wa.me` con el mensaje ya escrito.
+
+## Pruebas
+
+- **Datos:** `node tests/validar-datos.js` revisa galerías, stands, tiendas, prendas, precios y fotos. Ejecútalo cada vez que edites `js/data.js`.
+- **Página:** abre la web, pega el contenido de `tests/pruebas-navegador.js` en la consola del navegador (F12) y ejecuta `await vgPruebas()`. Prueba cada tienda, cada prenda, búsquedas, filtros, plano, teclado, enlaces, portada y fotos.
 
 ## Enlace directo a una tienda
 

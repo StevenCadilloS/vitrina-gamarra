@@ -4,6 +4,22 @@
   const { categorias: CATS, descripciones: DESC, ventas: VENTA } = window.VG_CATALOGO;
 
   const TIENDAS = DATA.tiendas.map(t => ({ ...t, piso: Math.floor(t.stand / 100), posicion: t.stand % 100 }));
+
+  // Las prendas y tiendas sin foto propia reciben una foto referencial de js/fotos.js, repartidas en orden.
+  const FOTOS = window.VG_FOTOS || {};
+  const referencia = (lista, i) => {
+    if (!lista || !lista.length) return null;
+    const [id, autor, pagina] = lista[i % lista.length];
+    return { src: `https://images.unsplash.com/photo-${id}?w=700&q=70&auto=format&fit=crop`, autor, pagina: `https://unsplash.com/photos/${pagina}` };
+  };
+  const contador = {};
+  TIENDAS.forEach((t, i) => {
+    t.ref = t.foto ? null : referencia(FOTOS.tiendas, i);
+    t.prendas.forEach(p => {
+      contador[p.categoria] = (contador[p.categoria] || 0) + 1;
+      p.ref = p.foto ? null : referencia(FOTOS[p.categoria], contador[p.categoria] - 1);
+    });
+  });
   const galeria = id => DATA.galerias.find(g => g.id === id);
   const tienda = id => TIENDAS.find(t => t.id === id);
 
@@ -24,7 +40,15 @@
   const fmtVistas = v => v >= 1000 ? (v / 1000).toFixed(1).replace('.0', '') + ' mil' : String(v);
   const mapsUrl = q => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
   const dibujo = p => `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="${CATS[p.categoria].dibujo}" fill="${p.colores[0]}" stroke="rgba(0,0,0,.35)" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
-  const foto = p => p.foto ? `<img src="${esc(p.foto)}" alt="${esc(p.nombre)}" loading="lazy">` : dibujo(p);
+  const foto = p => {
+    const src = p.foto || (p.ref && p.ref.src);
+    return src ? `<img src="${esc(src)}" alt="${esc(p.nombre)}" loading="lazy">` : dibujo(p);
+  };
+  const fotoTienda = t => {
+    const src = t.foto || (t.ref && t.ref.src);
+    return src ? `<img src="${esc(src)}" alt="Tienda ${esc(t.nombre)}" loading="lazy">` : '';
+  };
+  const credito = r => r ? `Foto referencial: <a href="${r.pagina}" target="_blank" rel="noopener">${esc(r.autor)} / Unsplash</a>` : '';
 
   function prendasQueCoinciden(t) {
     if (state.venta && !(t.venta === state.venta || t.venta === 'ambos')) return [];
@@ -92,6 +116,7 @@
     $('list').innerHTML = filas.map(({ t, m }) => {
       const top = [...m].sort((a, b) => vistas(b) - vistas(a));
       return `<button class="card" data-tienda="${t.id}">
+        <div class="shop-pic">${fotoTienda(t)}</div>
         <div><h3>${esc(t.nombre)}</h3><div class="loc">${esc(galeria(t.galeria).nombre)} · Piso ${t.piso} · Stand ${t.stand}</div></div>
         <span class="badge">${VENTA[t.venta]}</span>
         <div class="thumbs">${top.slice(0, 4).map(p => `<div class="thumb" title="${esc(p.nombre)}">${foto(p)}</div>`).join('')}${m.length > 4 ? `<span class="more">+${m.length - 4}</span>` : ''}</div>
@@ -103,6 +128,7 @@
     return `<div class="detail">
       <button class="back" data-volver>← Volver al catálogo</button>
       <div class="d-photo">${foto(p)}</div>
+      ${p.ref ? `<span class="credit">${credito(p.ref)}</span>` : ''}
       <h3>${esc(p.nombre)}</h3>
       <div class="price"><span class="u">S/ ${p.precioUnidad} c/u</span>${t.venta !== 'menor' ? `<span class="d">S/ ${p.precioDocena} la docena</span>` : ''}</div>
       <p class="desc">${esc(p.descripcion || DESC[p.categoria])}</p>
@@ -125,6 +151,7 @@
 
   function renderTienda() {
     const d = $('drawer');
+    document.documentElement.classList.toggle('bloqueado', !!state.abierta);
     if (!state.abierta) { d.hidden = true; $('backdrop').hidden = true; return; }
     const t = tienda(state.abierta), gal = galeria(t.galeria);
     const orden = [...t.prendas].sort((a, b) => vistas(b) - vistas(a));
@@ -133,7 +160,12 @@
     const lado = t.posicion <= 6 ? 'lado izquierdo' : 'lado derecho';
     const ruta = t.piso === 1 ? `Entra por ${gal.entrada} y avanza por el pasadizo; el stand ${t.stand} está al ${lado}.`
       : `Sube por la escalera al piso ${t.piso}; el stand ${t.stand} está al ${lado} del pasadizo.`;
+    // La foto, el encabezado y el catálogo comparten un solo scroll: la foto se va al deslizar y el nombre queda fijo arriba.
+    const previo = d.querySelector('.d-scroll');
+    const scroll = previo ? previo.scrollTop : 0;
     d.innerHTML = `
+      <div class="d-scroll">
+      <div class="d-hero">${fotoTienda(t)}${t.ref ? `<span class="credit">${credito(t.ref)}</span>` : ''}</div>
       <div class="d-head">
         <div class="d-top"><h2 id="dName">${esc(t.nombre)}</h2><button class="d-close" id="close" aria-label="Cerrar tienda">Cerrar</button></div>
         <div class="d-loc">${esc(gal.nombre)} › Piso ${t.piso} › Stand ${t.stand}</div>
@@ -159,41 +191,121 @@
               <span class="views">${fmtVistas(vistas(p))} vistas</span></div>
           </button>`).join('')}</div>`}
       </div>
+      </div>
       <div class="d-foot">
         <span class="msg">Mensaje: "${esc(mensajeWhatsapp(t, sel))}"</span>
         <button class="wa" id="wa">Escribir por WhatsApp</button>
         <span class="phone">+${t.whatsapp.slice(0, 2)} ${t.whatsapp.slice(2, 5)} ${t.whatsapp.slice(5, 8)} ${t.whatsapp.slice(8)}${DATA.demo ? ' (número de ejemplo)' : ''}</span>
       </div>`;
     d.hidden = false; $('backdrop').hidden = false;
+    d.querySelector('.d-scroll').scrollTop = scroll;
   }
+  const subirScroll = () => { const s = $('drawer').querySelector('.d-scroll'); if (s) s.scrollTop = 0; };
 
   function render() { renderFiltros(); renderPlano(); renderLista(); renderTienda(); }
 
-  // Cada tienda tiene su propio enlace: index.html#LB-103
+  // Pantalla de inicio: cifras, maqueta del celular con la tienda más vista y prendas destacadas
+  const SUGERENCIAS = ['polo oversize', 'jean mom', 'casaca', 'polera', 'vestido', 'buzo jogger'];
+  function renderInicio() {
+    const prendas = TIENDAS.flatMap(t => t.prendas.map(p => ({ t, p })));
+    const desde = Math.min(...prendas.map(x => x.p.precioUnidad));
+    $('heroStats').innerHTML = [[DATA.galerias.length, 'galerías'], [TIENDAS.length, 'tiendas'], [prendas.length, 'prendas'], [`S/ ${desde}`, 'precio desde']]
+      .map(([n, l]) => `<div><dt>${n}</dt><dd>${l}</dd></div>`).join('');
+    $('sug').innerHTML = '<span>Prueba:</span>' + SUGERENCIAS.map(s => `<button type="button" class="sug-chip" data-sugerencia="${s}">${s}</button>`).join('');
+
+    const total = t => t.prendas.reduce((n, p) => n + vistas(p), 0);
+    const estrella = [...TIENDAS].sort((a, b) => total(b) - total(a))[0];
+    const top = [...estrella.prendas].sort((a, b) => vistas(b) - vistas(a)).slice(0, 4);
+    $('phone').innerHTML = `
+      <div class="ph-hero">${fotoTienda(estrella)}</div>
+      <div class="ph-head"><b>${esc(estrella.nombre)}</b><span>Piso ${estrella.piso} · Stand ${estrella.stand}</span></div>
+      <div class="ph-grid">${top.map(p => `<div><div class="ph-img">${foto(p)}</div><span>S/ ${p.precioUnidad}</span></div>`).join('')}</div>
+      <div class="ph-wa">Escribir por WhatsApp</div>`;
+    $('pricetag').innerHTML = `<small>${esc(top[0].nombre)}</small><b>S/ ${top[0].precioUnidad}</b><span>Stand ${estrella.stand}</span>`;
+    $('miniPlan').innerHTML = Array.from({ length: 12 }, (_, i) => `<i style="--d:${(i * 7) % 12}"></i>`).join('');
+
+    const destacados = prendas.sort((a, b) => vistas(b.p) - vistas(a.p)).slice(0, 10);
+    $('rail').innerHTML = destacados.map(({ t, p }) => `
+      <button class="rail-item" data-ver="${t.id}|${esc(p.codigo)}">
+        <div class="rail-img">${foto(p)}</div>
+        <span class="nm">${esc(p.nombre)}</span>
+        <span class="price"><span class="u">S/ ${p.precioUnidad}</span><span class="views">${fmtVistas(vistas(p))} vistas</span></span>
+        <span class="loc">${esc(t.nombre)} · Stand ${t.stand}</span>
+      </button>`).join('');
+  }
+
+  // La palabra del titular rota entre prendas (se detiene si el usuario pidió menos movimiento)
+  function rotarTitular() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let i = 0;
+    setInterval(() => {
+      const el = $('rot');
+      el.classList.add('sale');
+      setTimeout(() => { i = (i + 1) % SUGERENCIAS.length; el.textContent = SUGERENCIAS[i]; el.classList.remove('sale'); }, 250);
+    }, 2600);
+  }
+
+  function buscarDesdeInicio(q) {
+    state.q = q; $('q').value = q; $('hq').value = q;
+    registrar('Búsqueda', { q, desde: 'inicio' });
+    render();
+    $('explorar').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+
+  // El buscador de la barra superior aparece cuando el de la portada ya no se ve
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(([e]) => document.documentElement.classList.toggle('en-portada', e.isIntersecting)).observe($('heroForm'));
+  }
+
+  // Cada tienda tiene su propio enlace: index.html#LB-103.
+  // Abrir una tienda agrega una entrada al historial, así el botón Atrás del celular la cierra.
+  let abiertaConHistorial = false;
   function abrirTienda(id, desdeEnlace) {
     const t = tienda(id);
     if (!t) return;
     Object.assign(state, { abierta: id, sel: null, tab: 'top', g: t.galeria, piso: t.piso });
-    if (!desdeEnlace) history.replaceState(null, '', '#' + id);
+    if (!desdeEnlace) { history.pushState(null, '', '#' + id); abiertaConHistorial = true; }
     registrar('Tienda abierta', { tienda: id });
-    render(); $('close') && $('close').focus();
+    render(); subirScroll(); $('close') && $('close').focus();
   }
-  function cerrarTienda() {
+  function cerrarTienda(desdeEnlace) {
     const id = state.abierta;
+    if (!id) return;
     state.abierta = null;
-    history.replaceState(null, '', location.pathname + location.search);
+    if (!desdeEnlace) {
+      if (abiertaConHistorial) history.back();
+      else history.replaceState(null, '', location.pathname + location.search);
+    }
+    abiertaConHistorial = false;
     render();
     const st = document.querySelector(`.stand[data-tienda="${id}"]`);
     st && st.focus();
   }
+  // Sincroniza la tienda abierta con el enlace (botón Atrás/Adelante o enlace editado a mano)
+  function seguirEnlace() {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (tienda(id)) { if (state.abierta !== id) abrirTienda(id, true); }
+    else if (state.abierta) cerrarTienda(true);
+  }
+  window.addEventListener('popstate', seguirEnlace);
+  window.addEventListener('hashchange', seguirEnlace);
 
   let toastT;
   function toast(msg) { const el = $('toast'); el.textContent = msg; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 3800); }
 
   document.addEventListener('click', e => {
-    const el = e.target.closest('[data-cat],[data-venta],[data-g],[data-piso],[data-tienda],[data-tab],[data-prenda],[data-volver],#close,#wa,#backdrop');
+    const el = e.target.closest('[data-cat],[data-venta],[data-g],[data-piso],[data-tienda],[data-tab],[data-prenda],[data-volver],[data-sugerencia],[data-ver],#close,#wa,#backdrop');
     if (!el) return;
     const ds = el.dataset;
+    if (ds.sugerencia) return buscarDesdeInicio(ds.sugerencia);
+    if (ds.ver) {
+      const [tid, codigo] = ds.ver.split('|');
+      abrirTienda(tid);
+      state.sel = codigo; local.vistas[codigo] = (local.vistas[codigo] || 0) + 1; guardar();
+      registrar('Prenda vista', { prenda: codigo, desde: 'inicio' });
+      renderTienda(); subirScroll();
+      return;
+    }
     if (ds.cat !== undefined) { state.cat = ds.cat; return render(); }
     if (ds.venta !== undefined) { state.venta = ds.venta; return render(); }
     if (ds.g) { state.g = ds.g; state.piso = 1; return render(); }
@@ -205,10 +317,10 @@
       state.sel = ds.prenda;
       local.vistas[ds.prenda] = (local.vistas[ds.prenda] || 0) + 1; guardar();
       registrar('Prenda vista', { prenda: ds.prenda });
-      renderTienda(); $('drawer').querySelector('.d-body').scrollTop = 0;
+      renderTienda(); subirScroll();
       return;
     }
-    if (el.id === 'close' || el.id === 'backdrop') return cerrarTienda();
+    if (el.id === 'close' || el.id === 'backdrop') return cerrarTienda(false);
     if (el.id === 'wa') {
       const t = tienda(state.abierta), p = t.prendas.find(x => x.codigo === state.sel);
       local.consultas[t.id] = (local.consultas[t.id] || 0) + 1; guardar();
@@ -219,13 +331,17 @@
     }
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && state.abierta) cerrarTienda();
+    if (e.key === 'Escape' && state.abierta) cerrarTienda(false);
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.stand')) { e.preventDefault(); abrirTienda(e.target.dataset.tienda); }
   });
   $('searchForm').addEventListener('submit', e => { e.preventDefault(); state.q = $('q').value; registrar('Búsqueda', { q: state.q }); render(); });
   $('q').addEventListener('input', e => { state.q = e.target.value; renderPlano(); renderLista(); });
 
-  $('demoNote').hidden = !DATA.demo;
+  $('heroForm').addEventListener('submit', e => { e.preventDefault(); buscarDesdeInicio($('hq').value); });
+
+  $('demoTag').hidden = $('demoFoot').hidden = !DATA.demo;
+  renderInicio();
+  rotarTitular();
   render();
-  if (location.hash.length > 1) abrirTienda(decodeURIComponent(location.hash.slice(1)), true);
+  seguirEnlace();
 })();
